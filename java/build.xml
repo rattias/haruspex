@@ -1,0 +1,94 @@
+<project>
+	<property name="third-party.dir" value="third-party"/>
+	<property name="jars.dir" value="build/jar"/>
+	<path id="third-party">
+		<fileset dir="${third-party.dir}" includes="**/*.jar"/>
+  </path>
+	<path id="haruspex">
+		<fileset dir="${jars.dir}" includes="**/*.jar"/>
+  </path>
+	
+  <target name="clean">
+  	<delete dir="build"/>
+  </target>
+
+	<target name="jars" depends="jar-common, jar-producer, jar-model"/>
+	
+	<target name="tests" depends="run-fb-test, run-json-test"/>
+		
+  <target name="compile-common">
+  	<mkdir dir="build/classes/common"/>
+  	<javac 
+   		srcdir="src" 
+      includes="haruspex/common/**/*.java" 
+     	destdir="build/classes/common" 
+    />
+  </target>
+
+  <target name="jar-common" depends="compile-common">
+    <mkdir dir="build/jar"/>
+    <jar destfile="build/jar/haruspex-commmon.jar" basedir="build/classes/common"/>
+  </target>
+
+  <target name="compile-producer">
+    <mkdir dir="build/classes/producer"/>
+    <javac 
+    	srcdir="src" 
+      includes="haruspex/producer/**/*.java" 
+     	destdir="build/classes/producer" 
+      classpathref="third-party"
+    />
+  </target>
+
+  <target name="jar-producer" depends="compile-producer">
+    <mkdir dir="build/jar"/>
+    <jar destfile="build/jar/haruspex-producer.jar" basedir="build/classes/producer"/>
+  </target>
+	
+  <target name="compile-model">
+    <mkdir dir="build/classes/model"/>
+    <javac 
+    	srcdir="src" 
+      includes="haruspex/model/**/*.java" 
+     	destdir="build/classes/model" 
+    />
+  </target>
+
+  <target name="jar-model" depends="compile-model">
+    <mkdir dir="build/jar"/>
+    <jar destfile="build/jar/haruspex-model.jar" basedir="build/classes/model"/>
+  </target>
+
+	<target name="compile-tests" depends="jars">
+	  <mkdir dir="build/classes/tests"/>
+	  <javac srcdir="tests" destdir="build/classes/tests"> 
+	    <classpath>
+	 		  <path refid="third-party"/>
+	 		  <path refid="haruspex"/>
+	    </classpath>
+	  </javac>
+	</target>
+	
+	<target name="run-fb-test" depends="jars, compile-tests">
+	 	<java fork="true" classname="haruspex.producer.FlatbufProducerTest">
+	  	<classpath>
+	    	<path refid="third-party"/>
+	      <path refid="haruspex"/>
+	      <pathelement path="build/classes/tests"/>
+	    </classpath>
+	 	  <arg value="/tmp/fb.out"/>
+	 	</java>
+	</target>
+	
+	<target name="run-json-test" depends="jars, compile-tests">
+	 	<java fork="false" classname="haruspex.producer.StdoutProducerTest">
+	  	<classpath>
+	    	<path refid="third-party"/>
+	      <path refid="haruspex"/>
+	      <pathelement path="build/classes/tests"/>
+	    </classpath>
+	 	  <redirector output="/tmp/json.out"/>
+	 	</java>
+	</target>
+
+</project>
