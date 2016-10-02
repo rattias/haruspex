@@ -1,1 +1,1 @@
-# haruspex
+docs/src/manual/overview.md
