@@ -1,11 +1,31 @@
+/*
+ * Copyright 2016 Roberto Attias
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License"); 
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software 
+ * distributed under the License is distributed on an "AS IS" BASIS, 
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and 
+ * limitations under the License.
+ */
 package haruspex.model;
 
 import java.util.Iterator;
 
 import haruspex.common.ClockDomain;
+import haruspex.common.ID;
 
-public interface ITrace extends ITraceElement {
+public interface ITrace extends ITraceElement, ITraceElementWithID {
   ClockDomain getClockDomain();
-  Iterator<? extends IEntity> entities();
-  int entityCount();
+  
+  Iterator<? extends IEntity> getEntityIterator();
+
+  IEntity getEntity(ID id);
+
+  int getEntityCount(); 
 }

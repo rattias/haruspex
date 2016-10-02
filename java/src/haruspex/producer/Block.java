@@ -1,10 +1,26 @@
+/*
+ * Copyright 2016 Roberto Attias
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License"); 
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software 
+ * distributed under the License is distributed on an "AS IS" BASIS, 
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and 
+ * limitations under the License.
+ */
 package haruspex.producer;
 
-import haruspex.common.CoreTags;
+import haruspex.common.EventType;
 import haruspex.common.ID;
 import haruspex.common.LocalID;
 import haruspex.common.Tag;
 import haruspex.common.TagList;
+import haruspex.common.event.IEventSink;
 
 /**
  * A {@code Block} represents an interval of time. {@code Block}s are created from {@link Entity} by calling
@@ -27,9 +43,13 @@ import haruspex.common.TagList;
 public class Block extends TraceElement implements AutoCloseable {
   private boolean isClosed;
   
-  public final static Block GHOST =  new Block(LocalID.GHOST, Trace.GHOST, Entity.GHOST, TraceSerializer.GHOST, null) {
+  public final static Block GHOST =  new Block(
+      LocalID.GHOST, 
+      Trace.GHOST, 
+      Entity.GHOST, 
+      IEventSink.GHOST) {
     @Override
-    public void point(String name, Tag...pointTags) {  
+    public void point(Tag...pointTags) {  
     }
   
     @Override
@@ -37,24 +57,28 @@ public class Block extends TraceElement implements AutoCloseable {
     }
   };
   
-  Block(ID id, Trace trace, Entity entity, TraceSerializer serializer, String blockName, Tag...blockTags) {
+  Block(ID id, Trace trace, Entity entity, IEventSink serializer, Tag...blockTags) {
     super(trace, entity, id, serializer);
-    serializer.serialize(
+    serializer.put(
         trace.seqNum(),
         getTrace().getClockDomain().getTime(),
         new ID[]{trace.getID(), entity.getID(), id},       
-        TagList.of(TagList.Context.BLOCK, blockTags).addAll(Tag.of(CoreTags.NAME, blockName))        
+        TagList.of(blockTags, EventType.BEGIN_BLOCK.getTag()),
+        TagList.of(EventType.ANNOTATE_POINT.getTag())
     );
   }
 
-  Block(ID id, Trace trace, Entity entity, TraceSerializer serializer, String blockName, Tag[] blockTags, Tag...pointTags) {
+  Block(ID id, Trace trace, Entity entity, IEventSink serializer, Tag[] blockTags, Tag...pointTags) {
     super(trace, entity, id, serializer);
-    serializer.serialize(
+    serializer.put(
         trace.seqNum(),
         getTrace().getClockDomain().getTime(),
         new ID[]{trace.getID(), entity.getID(), id},
-        TagList.of(TagList.Context.BLOCK, blockTags).addAll(Tag.of(CoreTags.NAME, blockName)),
-        TagList.of(TagList.Context.POINT, pointTags)
+        TagList.of(
+            blockTags,
+            EventType.BEGIN_BLOCK.getTag()
+        ),
+        TagList.of(pointTags, EventType.ANNOTATE_POINT.getTag())
     );
   }
 
@@ -63,17 +87,15 @@ public class Block extends TraceElement implements AutoCloseable {
    * @param name name for the point
    * @param pointTags tags
    */
-  public void point(String name, Tag...pointTags) {
+  public void point(Tag...pointTags) {
     if (isClosed) {
       throw new IllegalStateException("Block had been previously closed.");
     }
-    getSerializer().serialize(
+    getSink().put(
         getTrace().seqNum(),
         getTrace().getClockDomain().getTime(),
         new ID[]{getTrace().getID(), getParent().getID(), getID()},
-        TagList.of(TagList.Context.POINT,
-            Tag.of(CoreTags.NAME, name)
-        ).addAll(pointTags)
+        TagList.of(pointTags, EventType.ANNOTATE_POINT.getTag())
     );
   }
   
@@ -91,12 +113,12 @@ public class Block extends TraceElement implements AutoCloseable {
    * @param pointTags tags for the end point
    */
   public void close(Tag[] blockTags, Tag...pointTags) {
-    getSerializer().serialize(
+    getSink().put(
         getTrace().seqNum(),
         getTrace().getClockDomain().getTime(),
         new ID[]{getTrace().getID(), getParent().getID(), getID()},
-        TagList.of(TagList.Context.BLOCK,CoreTags.endBlock()).addAll(blockTags),
-        TagList.of(TagList.Context.POINT, pointTags)  
+        TagList.of(blockTags, EventType.END_BLOCK.getTag()),
+        TagList.of(pointTags, EventType.ANNOTATE_POINT.getTag())
     );
     isClosed = true;
   }

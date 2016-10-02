@@ -1,14 +1,32 @@
+/*
+ * Copyright 2016 Roberto Attias
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License"); 
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software 
+ * distributed under the License is distributed on an "AS IS" BASIS, 
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and 
+ * limitations under the License.
+ */
 package haruspex.producer;
 
+import java.io.PrintWriter;
 import java.util.concurrent.atomic.AtomicLong;
 
 import haruspex.common.ClockDomain;
-import haruspex.common.CoreTags;
 import haruspex.common.DefaultClockDomain;
+import haruspex.common.EventType;
 import haruspex.common.GlobalID;
 import haruspex.common.ID;
 import haruspex.common.Tag;
 import haruspex.common.TagList;
+import haruspex.common.event.IEventSink;
+import haruspex.common.event.PrintWriterSink;
 /**
  * A {@code Trace} is a {@link TraceElement} represents a portion of a trace created by a particular process.
  * As any {@code TraceElement}, it is characterized by an {@link haruspex.common.ID}, and a, possibly empty,
@@ -31,24 +49,25 @@ import haruspex.common.TagList;
  * 
  */
 public class Trace extends TraceElement implements AutoCloseable {  
-  public final static Trace GHOST = new Trace(TraceSerializer.GHOST, GlobalID.GHOST, DefaultClockDomain.INSTANCE);
-    
+  public final static Trace GHOST = new Trace(IEventSink.GHOST, GlobalID.GHOST, DefaultClockDomain.INSTANCE);
   private final AtomicLong seqNum;
   private final ClockDomain clockDomain;
       
-  private Trace(TraceSerializer serializer, GlobalID id, ClockDomain clockDomain, Tag...tags) {
-    super(null, null, id, serializer);
+  private Trace(IEventSink sink, GlobalID id, ClockDomain clockDomain, Tag...tags) {
+    super(null, null, id, sink);
     this.clockDomain = clockDomain;
     this.seqNum = new AtomicLong();
-    serializer.serialize(
+    sink.put(
         seqNum(),
         clockDomain.getTime(),
         new ID[]{getID()},
-        TagList.of(TagList.Context.TRACE,
-            Tag.of(CoreTags.TIME_UNIT, clockDomain.getTimeUnit()),
-            Tag.of(CoreTags.CLOCK_DOMAIN, clockDomain.getName()),
-            Tag.of(CoreTags.CLOCK_MAX_SKEW, clockDomain.getMaxSkew())
-        ).addAll(tags)
+        TagList.of(
+            tags,
+            EventType.BEGIN_TRACE.getTag(),
+            Tag.clockTimeUnit(clockDomain.getTimeUnit()),
+            Tag.clockDomain(clockDomain.getName()),
+            Tag.clockMaxSkew(clockDomain.getMaxSkew())
+        )
     );
   }
 
@@ -59,15 +78,6 @@ public class Trace extends TraceElement implements AutoCloseable {
     return seqNum.getAndIncrement();
   }
   
-//  /**
-//   * creates an entity with the specified name and a globally-unique ID.
-//   * @param name name given to the entity
-//   * @return the {@link Entity entity} object
-//   */
-//  public Entity entity(String name) {
-//    return entity(name, TagList.EMPTY_ARRAY);
-//  }
-
   /**
    * 
    * @param name the name given to the entity
@@ -75,7 +85,7 @@ public class Trace extends TraceElement implements AutoCloseable {
    * @return the {@link Entity entity}
    */
   public Entity entity(String name, Tag...tags) {
-    return new Entity(this, getSerializer(), name, tags);
+    return new Entity(this, getSink(), name, tags);
   }
   
   /**
@@ -99,13 +109,11 @@ public class Trace extends TraceElement implements AutoCloseable {
    * @param tags list of tags
    */
   public void close(Tag...tags) {
-    getSerializer().serialize(
+    getSink().put(
         getTrace().seqNum(),
         getTrace().getClockDomain().getTime(),
         new ID[]{getTrace().getID(), getID()},
-        TagList.of(TagList.Context.TRACE,
-            CoreTags.endEntity()
-        ).prependAll(tags)
+        TagList.of(tags, EventType.END_TRACE.getTag())
     );    
   }
 
@@ -116,15 +124,15 @@ public class Trace extends TraceElement implements AutoCloseable {
   public static class Builder {
     private ClockDomain clockDomain = DefaultClockDomain.INSTANCE;
     private SamplingPolicy samplingPolicy = SamplingPolicies.ALWAYS;
-    private TraceSerializer serializer = TraceSerializer.GHOST;
+    private IEventSink sink = null;
 
     /**
      * 
-     * @param serializer the {@link TraceSerializer serializer} to be used for the trace
+     * @param serializer the {@link IEventSink serializer} to be used for the trace
      * @return the builder
      */
-    public Builder setSerializer(TraceSerializer serializer) {
-      this.serializer = serializer;
+    public Builder setSink(IEventSink sink) {
+      this.sink = sink;
       return this;
     }
 
@@ -165,7 +173,11 @@ public class Trace extends TraceElement implements AutoCloseable {
      */
     public Trace build(GlobalID id, Tag...tags) {
       return samplingPolicy.shouldTrace()
-        ? new Trace(serializer, id, clockDomain, tags)
+        ? new Trace(
+            sink == null ? new PrintWriterSink(new PrintWriter(System.err)) : sink,
+            id, 
+            clockDomain, 
+            tags)
         : Trace.GHOST;
     }
   }

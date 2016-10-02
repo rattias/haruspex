@@ -1,9 +1,27 @@
-<project>
+ 	<project>
 	<property name="third-party.dir" value="third-party"/>
 	<property name="jars.dir" value="build/jar"/>
 	<path id="third-party">
 		<fileset dir="${third-party.dir}" includes="**/*.jar"/>
   </path>
+	<path id="jython-lib">
+		<fileset dir="${third-party.dir}" includes="jython*.jar"/>
+  </path>
+	<path id="flatbuf-lib">
+		<fileset dir="${third-party.dir}" includes="flatbuffers*.jar"/>
+  </path>
+	<path id="args4j-lib">
+		<fileset dir="${third-party.dir}" includes="args4j*.jar"/>
+  </path>
+	<path id="slf4j-lib">
+		<fileset dir="${third-party.dir}" includes="slf4j*.jar"/>
+  </path>
+	<path id="kafka-lib">
+		<fileset dir="${third-party.dir}" includes="kafka*.jar"/>
+  </path>
+ 	<path id="json-lib">
+		<fileset dir="${third-party.dir}" includes="json-simple*.jar"/>
+ 	</path>
 	<path id="haruspex">
 		<fileset dir="${jars.dir}" includes="**/*.jar"/>
   </path>
@@ -12,32 +30,74 @@
   	<delete dir="build"/>
   </target>
 
-	<target name="jars" depends="jar-common, jar-producer, jar-model"/>
-	
-	<target name="tests" depends="run-fb-test, run-json-test"/>
-		
-  <target name="compile-common">
-  	<mkdir dir="build/classes/common"/>
-  	<javac 
-   		srcdir="src" 
-      includes="haruspex/common/**/*.java" 
-     	destdir="build/classes/common" 
-    />
+	<target name="jars" depends="jar-producer, jar-core, jar-all"/>
+
+  <!--=============== ALL: cointains all classes -->
+  <target name="compile-all">
+    <mkdir dir="build/classes/all"/>
+    <javac
+      srcdir="src"
+      includes="haruspex/common/**/*.java, haruspex/model/**/*.java, haruspex/producer/**/*.java"
+      destdir="build/classes/all"
+      includeantruntime="false">
+      <classpath>
+        <path refid="third-party"/>
+      </classpath>
+    </javac>
   </target>
 
-  <target name="jar-common" depends="compile-common">
+  <target name="jar-all" depends="compile-all">
     <mkdir dir="build/jar"/>
-    <jar destfile="build/jar/haruspex-commmon.jar" basedir="build/classes/common"/>
+    <jar destfile="build/jar/haruspex-all.jar" basedir="build/classes/all"/>
   </target>
 
+
+  <!--================ CORE: contains all classes but third-party specific sinks/codecs -->
+  <target name="compile-core">
+    <mkdir dir="build/classes/core"/>
+    <javac
+      srcdir="src"
+      includes="haruspex/common/*.java, haruspex/common/event/*.java, haruspex/model/**/*.java, haruspex/producer/**/*.java"
+      destdir="build/classes/core"
+      includeantruntime="false">
+      <classpath>
+        <path refid="third-party"/>
+      </classpath>
+    </javac>
+  </target>
+
+  <target name="jar-core" depends="compile-core">
+    <mkdir dir="build/jar"/>
+    <jar destfile="build/jar/haruspex-core.jar" basedir="build/classes/core"/>
+  </target>
+
+  <target name="compile-common">
+    <mkdir dir="build/classes/common"/>
+      <javac 
+          srcdir="src" 
+          includes="haruspex/common/*.java, haruspex/common/event/*.java" 
+     	  destdir="build/classes/common" 
+          includeantruntime="false">
+        <classpath>
+          <path refid="json-lib"/>
+          <path refid="slf4j-lib"/>
+        </classpath>
+      </javac>
+  </target>
+
+  <!--===================== PRODUCER JAR (contains only classes required by producer)-->
   <target name="compile-producer">
     <mkdir dir="build/classes/producer"/>
     <javac 
     	srcdir="src" 
-      includes="haruspex/producer/**/*.java" 
+      includes="haruspex/producer/**/*.java, haruspex/common/*.java, haruspex/common/event/*.java" 
      	destdir="build/classes/producer" 
-      classpathref="third-party"
-    />
+    	includeantruntime="false">
+      <classpath>
+        <path refid="json-lib"/>
+        <path refid="slf4j-lib"/>
+      </classpath> 
+    </javac>
   </target>
 
   <target name="jar-producer" depends="compile-producer">
@@ -45,12 +105,14 @@
     <jar destfile="build/jar/haruspex-producer.jar" basedir="build/classes/producer"/>
   </target>
 	
+ 	<!--===================== MODEL =====================-->
   <target name="compile-model">
     <mkdir dir="build/classes/model"/>
     <javac 
     	srcdir="src" 
       includes="haruspex/model/**/*.java" 
      	destdir="build/classes/model" 
+    	includeantruntime="false"
     />
   </target>
 
@@ -59,9 +121,72 @@
     <jar destfile="build/jar/haruspex-model.jar" basedir="build/classes/model"/>
   </target>
 
-	<target name="compile-tests" depends="jars">
+ 	<!--===================== CUSTOM SINK/SOURCE/CODEC: KAFKA =====================-->
+  <target name="compile-kafka">
+  	<mkdir dir="build/classes/event_kafka"/>
+  	<javac 
+   		srcdir="src" 
+      includes="haruspex/common/event/kafka/*.java" 
+     	destdir="build/classes/event_kafka" 
+  		includeantruntime="false">
+	    <classpath>
+		  	<path refid="kafka-lib"/>
+  			<path refid="json-lib"/>
+  			<path refid="slf4j-lib"/>
+			</classpath>
+    </javac>
+  </target>
+
+  <target name="jar-kafka" depends="compile-kafka">
+    <mkdir dir="build/jar"/>
+    <jar destfile="build/jar/haruspex-event-kafka.jar"
+         basedir="build/classes/event_kafka"
+         includes="haruspex/common/event/kafka/**"
+    />
+  </target>
+ 		
+ 	<!--===================== CUSTOM SINK/SOURCE/CODEC: FLATBUF =====================-->
+  <target name="compile-flatbuf">
+  	<mkdir dir="build/classes/event_flatbuf"/>
+  	<javac 
+   		srcdir="src" 
+      includes="haruspex/common/event/flatbuf/*.java" 
+     	destdir="build/classes/event_flatbuf" 
+  		includeantruntime="false">
+	    <classpath>
+		  	<path refid="flatbuf-lib"/>
+  			<path refid="json-lib"/>
+  			<path refid="slf4j-lib"/>
+			</classpath>
+		</javac>
+  </target>
+
+  <target name="jar-flatbuf" depends="compile-flatbuf">
+    <mkdir dir="build/jar"/>
+    <jar destfile="build/jar/haruspex-event-flatbuf.jar" basedir="build/classes/event_flatbuf"/>
+  </target>
+ 		
+ 	<!--===================== TESTS =====================-->
+ 		
+ 	<target name="junit" depends="compile-tests">
+    <junit printsummary="yes">
+      <classpath>
+        <path refid="third-party"/>
+        <path refid="haruspex"/>
+      </classpath>
+      
+      <batchtest fork="yes">
+        <fileset dir="tests" includes="*Test.java"/>
+      </batchtest>
+    </junit>
+  </target>
+ 		
+ 		
+ 	<target name="run-tests" depends="run-fb-test, run-json-test"/>
+
+ 	<target name="compile-tests" depends="jars">
 	  <mkdir dir="build/classes/tests"/>
-	  <javac srcdir="tests" destdir="build/classes/tests"> 
+	  <javac srcdir="tests" destdir="build/classes/tests" includeantruntime="false"> 
 	    <classpath>
 	 		  <path refid="third-party"/>
 	 		  <path refid="haruspex"/>

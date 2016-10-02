@@ -1,6 +1,22 @@
+/*
+ * Copyright 2016 Roberto Attias
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License"); 
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software 
+ * distributed under the License is distributed on an "AS IS" BASIS, 
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and 
+ * limitations under the License.
+ */
 package haruspex.producer;
 
 import haruspex.common.ID;
+import haruspex.common.event.IEventSink;
 
 /**
  * Common superclass to {@link Trace}, {@link Entity}, {@link Block}.
@@ -9,7 +25,7 @@ import haruspex.common.ID;
 abstract public class TraceElement {
   private final Trace trace;
   private final ID id;
-  private final TraceSerializer serializer;
+  private final IEventSink sink;
   private final TraceElement parent;
   
   /**
@@ -18,13 +34,13 @@ abstract public class TraceElement {
    * in fact the {@code Trace} object.
    * @param parent the parent object for this one. 
    * @param id the ID for the object
-   * @param serializer the serializer used for event generation.
+   * @param sink the sink used for event generation.
    */
-  TraceElement(Trace trace, TraceElement parent, ID id, TraceSerializer serializer) {
+  TraceElement(Trace trace, TraceElement parent, ID id, IEventSink sink){
     this.trace = trace == null ? (Trace)this : trace;
     this.parent = parent;
     this.id = id;
-    this.serializer = serializer;
+    this.sink = sink;
   }
   
   /**
@@ -36,10 +52,10 @@ abstract public class TraceElement {
 
   /**
    * 
-   * @return the {@link TraceSerializer} for this object.
+   * @return the {@link IEventSink} for this object.
    */
-  public TraceSerializer getSerializer() {
-    return serializer;
+  public IEventSink getSink() {
+    return sink;
   }
   
   /**

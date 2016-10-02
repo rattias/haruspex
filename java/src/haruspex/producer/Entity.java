@@ -1,11 +1,27 @@
+/*
+ * Copyright 2016 Roberto Attias
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License"); 
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software 
+ * distributed under the License is distributed on an "AS IS" BASIS, 
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and 
+ * limitations under the License.
+ */
 package haruspex.producer;
 
-import haruspex.common.CoreTags;
+import haruspex.common.EventType;
 import haruspex.common.GlobalID;
 import haruspex.common.ID;
 import haruspex.common.LocalID;
 import haruspex.common.Tag;
 import haruspex.common.TagList;
+import haruspex.common.event.IEventSink;
 
 /**
  * An {@code Entity} captures a unit of distributed computation such as a thread. Entities are created
@@ -13,17 +29,18 @@ import haruspex.common.TagList;
  * 
  */
 public class Entity extends TraceElement implements AutoCloseable {
-  public final static Entity GHOST = new Entity(Trace.GHOST, TraceSerializer.GHOST, "<ghost>");
+  public final static Entity GHOST = new Entity(Trace.GHOST, IEventSink.GHOST, "<ghost>");
   private boolean isClosed;
   private int blockIdCounter;
   
-  Entity(Trace trace, TraceSerializer serializer, String name, Tag...tags) {
+  Entity(Trace trace, IEventSink serializer, String name, Tag...tags) {
     super(trace, trace, GlobalID.random(), serializer);
-    serializer.serialize(
+    serializer.put(
         trace.seqNum(),
         trace.getClockDomain().getTime(),
         new ID[]{trace.getID(), getID()},
-        TagList.of(TagList.Context.ENTITY, Tag.of(CoreTags.NAME, name)).addAll(tags)
+        TagList.of(tags, EventType.BEGIN_ENTITY.getTag(), Tag.name(name)
+        )
     );
   }
   
@@ -33,11 +50,16 @@ public class Entity extends TraceElement implements AutoCloseable {
    * @param blockTags tags to be emitted associated to the block
    * @return a {@code Block} instance
    */
-  public Block block(String name, Tag...blockTags) {
+  public Block block(Tag...blockTags) {
     if (isClosed) {
       throw new IllegalStateException("Entity was closed");
     }
-    return new Block(new LocalID(blockIdCounter++), getTrace(), this, getSerializer(), name, blockTags);
+    return new Block(
+        LocalID.of(blockIdCounter++), 
+        getTrace(), 
+        this, 
+        getSink(), 
+        blockTags);
   }
 
   /**
@@ -48,11 +70,16 @@ public class Entity extends TraceElement implements AutoCloseable {
    * @param pointTags tags to be emitted associated to the point
    * @return a {@code Block} instance
    */
-  public Block block(String name, Tag[] blockTags, Tag...pointTags) {
+  public Block block(Tag[] blockTags, Tag...pointTags) {
     if (isClosed) {
       throw new IllegalStateException("Entity was closed");
     }
-    return new Block(new LocalID(blockIdCounter++), getTrace(), this, getSerializer(), name, blockTags, pointTags);
+    return new Block(
+        LocalID.of(blockIdCounter++), 
+        getTrace(), 
+        this, getSink(), 
+        blockTags, 
+        pointTags);
   }
 
   /**
@@ -65,14 +92,12 @@ public class Entity extends TraceElement implements AutoCloseable {
 
   
   public void close(Tag...tags) {
-    getSerializer().serialize(
+    getSink().put(
         getTrace().seqNum(),
         getTrace().getClockDomain().getTime(),
         new ID[]{getTrace().getID(), getID()},
-        TagList.of(TagList.Context.ENTITY,
-            CoreTags.endEntity()
-        ).prependAll(tags)
-    );    
+        TagList.of(tags, EventType.END_ENTITY.getTag())
+    );
     isClosed = true;
   }
   

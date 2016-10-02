@@ -1,3 +1,18 @@
+/*
+ * Copyright 2016 Roberto Attias
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License"); 
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software 
+ * distributed under the License is distributed on an "AS IS" BASIS, 
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and 
+ * limitations under the License.
+ */
 package haruspex.urn;
 
 import java.io.FileInputStream;
@@ -14,8 +29,10 @@ import org.kohsuke.args4j.Option;
 import org.kohsuke.args4j.spi.StringArrayOptionHandler;
 
 import haruspex.batchdiviner.Diviner;
-import haruspex.batchdiviner.TraceEventSource;
-import haruspex.batchdiviner.TraceEvents;
+import haruspex.common.TraceEvents;
+import haruspex.common.event.IEventSource;
+import haruspex.model.BytesRecordSource;
+import haruspex.model.StringsRecordSource;
 
 public class Urn {
   public static final Options OPTIONS = new Options();
@@ -40,11 +57,38 @@ public class Urn {
     ExecutorService executor = Executors.newFixedThreadPool(workerCount);    
     for (int i = 0; i < workerCount; i++) {
       executor.submit(() -> {
-        TraceEventSource traceSource = newInstance(traceSourceClass);
+        IEventSource recordSource = newInstance(traceSourceClass);
         TraceStorage traceStorage = newInstance(traceStorageClass);
-        while(true) {
-          TraceEvents[] traceEvents = traceSource.poll(pollPeriod);
+        try {
+          if (recordSource instanceof StringsRecordSource) {
+            StringsRecordSource stringRecordSource = (StringsRecordSource)recordSource;
+            while(true) {
+              TraceEvents<String>[] traceEvents = stringRecordSource.pollAsStrings(0);
+              for (TraceEvents<String> ev : traceEvents) {
+                traceStorage.storeStrings(ev);
+              }
+              recordSource.checkpoint();
+              Thread.sleep(pollPeriod);
+            }
+          } else {
+            BytesRecordSource bytesRecordSource = (BytesRecordSource)recordSource;
+            while(true) {
+              TraceEvents<byte[]>[] traceEvents = bytesRecordSource.pollAsBytes(0);
+              for (TraceEvents<byte[]> ev : traceEvents) {
+                traceStorage.storeBytes(ev);
+              }
+              recordSource.checkpoint();
+              Thread.sleep(pollPeriod);
+            }
+          }
+        } catch (IOException e) {
+          // TODO Auto-generated catch block
+          e.printStackTrace();
+        } catch (InterruptedException e) {
+          // TODO Auto-generated catch block
+          e.printStackTrace();
         }
+
       });
     }
   }
